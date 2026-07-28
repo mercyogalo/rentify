@@ -1,7 +1,10 @@
 import { initializeApp, getApps, type FirebaseApp } from 'firebase/app';
-import { initializeAuth, getAuth, type Auth } from 'firebase/auth';
+import {
+  initializeAuth,
+  getAuth,
+  type Auth,
+} from 'firebase/auth';
 import { getFirestore, type Firestore } from 'firebase/firestore';
-import { getStorage, type FirebaseStorage } from 'firebase/storage';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
@@ -21,7 +24,6 @@ export const isFirebaseConfigured = Boolean(
 let app: FirebaseApp | null = null;
 let auth: Auth | null = null;
 let firestore: Firestore | null = null;
-let storage: FirebaseStorage | null = null;
 
 function getApp(): FirebaseApp {
   if (!isFirebaseConfigured) {
@@ -58,11 +60,6 @@ export function getFirebaseAuth(): Auth {
 export function getFirebaseFirestore(): Firestore {
   if (!firestore) firestore = getFirestore(getApp());
   return firestore;
-}
-
-export function getFirebaseStorage(): FirebaseStorage {
-  if (!storage) storage = getStorage(getApp());
-  return storage;
 }
 
 export { getFirebaseAuth as auth };

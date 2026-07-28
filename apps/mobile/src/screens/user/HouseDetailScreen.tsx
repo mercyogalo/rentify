@@ -8,10 +8,10 @@ import {
   Dimensions,
   TouchableOpacity,
 } from 'react-native';
-import MapView, { Marker } from 'react-native-maps';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../../components/Button';
+import { ListingMap } from '../../components/ListingMap';
 import { useListingStore } from '../../store/listingStore';
 import { useChatStore } from '../../store/chatStore';
 import { colors, spacing, typography, radius } from '../../theme';
@@ -87,17 +87,11 @@ export function HouseDetailScreen({ route, navigation }: Props) {
         </View>
 
         <Text style={styles.sectionTitle}>Location</Text>
-        <MapView
+        <ListingMap
+          latitude={listing.location.lat}
+          longitude={listing.location.lng}
           style={styles.map}
-          initialRegion={{
-            latitude: listing.location.lat,
-            longitude: listing.location.lng,
-            latitudeDelta: 0.02,
-            longitudeDelta: 0.02,
-          }}
-        >
-          <Marker coordinate={{ latitude: listing.location.lat, longitude: listing.location.lng }} />
-        </MapView>
+        />
 
         {listing.agent && (
           <TouchableOpacity

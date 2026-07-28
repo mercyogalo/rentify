@@ -15,7 +15,6 @@ export function initFirebase(): admin.app.App {
         clientEmail: env.firebase.clientEmail,
         privateKey: env.firebase.privateKey,
       }),
-      storageBucket: env.firebase.storageBucket || undefined,
     });
   } else {
     admin.initializeApp({
@@ -35,9 +34,4 @@ export function getAuth(): admin.auth.Auth {
 export function getFirestore(): admin.firestore.Firestore {
   initFirebase();
   return admin.firestore();
-}
-
-export function getStorage(): admin.storage.Storage {
-  initFirebase();
-  return admin.storage();
 }

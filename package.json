@@ -12,7 +12,8 @@
     "build:types": "npm run build --workspace=packages/shared-types",
     "seed:admin": "npm run seed:admin --workspace=apps/api",
     "test": "npm run build:types && npm run test --workspace=apps/api && npm run test --workspace=apps/admin-dashboard",
-    "firebase:deploy": "npx -y firebase-tools@latest deploy --only firestore,storage,auth"
+    "firebase:setup": "bash scripts/setup-firebase.sh",
+    "firebase:deploy": "npx -y firebase-tools@latest deploy --only firestore,auth --project rentify-d14d3"
   },
   "devDependencies": {
     "typescript": "^5.4.5"

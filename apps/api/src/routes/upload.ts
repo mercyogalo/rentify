@@ -1,12 +1,14 @@
 import { Router, Response } from 'express';
 import multer from 'multer';
 import { v4 as uuidv4 } from 'uuid';
-import { getStorage } from '../config/firebase';
-import { env } from '../config/env';
 import { authenticate, AuthenticatedRequest } from '../middleware/auth';
+import { uploadToS3, isS3Configured } from '../services/s3';
 
 const router = Router();
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+});
 
 router.post(
   '/',
@@ -19,21 +21,16 @@ router.post(
         return;
       }
 
-      const bucket = getStorage().bucket(env.firebase.storageBucket || undefined);
-      if (!env.firebase.storageBucket) {
-        const placeholder = `https://picsum.photos/seed/${Date.now()}/800/600`;
-        res.json({ url: placeholder });
+      if (!isS3Configured()) {
+        res.status(503).json({ error: 'S3 upload is not configured' });
         return;
       }
 
-      const filename = `listings/${req.auth!.userId}/${uuidv4()}-${req.file.originalname}`;
-      const file = bucket.file(filename);
-      await file.save(req.file.buffer, {
-        metadata: { contentType: req.file.mimetype },
-      });
-      await file.makePublic();
-      const url = `https://storage.googleapis.com/${bucket.name}/${filename}`;
-      res.json({ url });
+      const ext = req.file.originalname.split('.').pop() || 'jpg';
+      const key = `listings/${req.auth!.userId}/${uuidv4()}.${ext}`;
+      const url = await uploadToS3(key, req.file.buffer, req.file.mimetype);
+
+      res.json({ url, key });
     } catch (err) {
       console.error(err);
       res.status(500).json({ error: 'Upload failed' });

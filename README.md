@@ -4,7 +4,7 @@ A marketplace connecting home seekers with real estate agents. Monorepo with:
 
 - **`apps/mobile`** — Expo React Native app (User + Agent/Landlord flows)
 - **`apps/admin-dashboard`** — React + Vite admin panel
-- **`apps/api`** — Node/Express API backed by **Firebase** (Auth, Firestore, Storage)
+- **`apps/api`** — Node/Express API: **Firebase** Auth + Firestore, **AWS S3** for images
 - **`packages/shared-types`** — Shared TypeScript interfaces
 
 ## Tech Stack
@@ -13,16 +13,17 @@ A marketplace connecting home seekers with real estate agents. Monorepo with:
 |-------|-------|
 | Mobile | Expo, React Navigation, Zustand, Firebase Auth + Google Sign-In |
 | Admin | React, Vite, Recharts, Firebase Auth + Google Sign-In |
-| Backend | Express, **Firebase Admin** (Firestore, Auth, Storage), Socket.io |
+| Backend | Express, **Firebase Admin** (Auth, Firestore), **AWS S3**, Socket.io |
 | Auth | Firebase Authentication (email/password + Google OAuth) |
 
 ## Firebase Setup
 
 1. Create a Firebase project at [console.firebase.google.com](https://console.firebase.google.com)
 2. Enable **Authentication** → Email/Password and **Google** sign-in
-3. Create a **Firestore** database and **Storage** bucket
-4. Download a **service account key** (Project Settings → Service Accounts) for the API
-5. Copy env files and fill in credentials:
+3. Create a **Firestore** database (Storage is **not** required — images go to AWS S3)
+4. Create an **AWS S3 bucket** and IAM access keys for image uploads
+5. Download a **service account key** (Project Settings → Service Accounts) for the API
+6. Copy env files and fill in credentials:
 
 ```bash
 cp apps/api/.env.example apps/api/.env
@@ -63,6 +64,19 @@ npm run test     # Type-check all packages
 - Admin role is set via custom claims + seed script (not self-registerable)
 - Signup role options: **Looking for a home** or **Agent / Landlord**
 
+## Image Uploads
+
+Listing and profile photos are uploaded to **AWS S3** via `POST /api/upload` (authenticated). Configure in `apps/api/.env`:
+
+```
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+AWS_REGION=eu-north-1
+AWS_BUCKET_NAME=rentify-store
+```
+
+The mobile app uses `expo-image-picker` and sends images to the API; returned S3 URLs are stored in Firestore listing documents.
+
 ## Mock Mode
 
 If Firebase env vars are missing, the mobile app falls back to mock data. Set `EXPO_PUBLIC_USE_MOCK=true` to force mock mode.
@@ -90,4 +104,4 @@ rentify/
 | `npm run admin` | Start admin dashboard |
 | `npm run seed:admin` | Create Firebase admin user |
 | `npm run test` | Type-check all packages |
-| `npm run firebase:deploy` | Deploy Firestore/Storage/Auth rules |
+| `npm run firebase:deploy` | Deploy Firestore rules + Auth config |

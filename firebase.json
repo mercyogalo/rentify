@@ -12,7 +12,7 @@
       "googleSignIn": {
         "oAuthBrandDisplayName": "Rentify",
         "supportEmail": "support@rentify.com",
-        "authorizedDomains": ["localhost", "127.0.0.1"]
+        "authorizedDomains": ["localhost", "127.0.0.1", "rentify-d14d3.firebaseapp.com"]
       }
     }
   }

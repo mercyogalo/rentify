@@ -7,7 +7,9 @@ import {
   TouchableOpacity,
   Alert,
   Switch,
+  Image,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
@@ -17,6 +19,7 @@ import { AMENITIES_OPTIONS, PROPERTY_TYPES } from '../../data/mockData';
 import { colors, spacing, typography, radius } from '../../theme';
 import type { AgentStackParamList } from '../../navigation/types';
 import type { Listing, PropertyType } from '@rentify/shared-types';
+import { uploadImage } from '../../services/upload';
 
 type Props = NativeStackScreenProps<AgentStackParamList, 'AddListing' | 'EditListing'>;
 
@@ -42,6 +45,31 @@ export function ListingFormScreen({ route, navigation }: Props) {
   const [bathrooms, setBathrooms] = useState(existing?.bathrooms?.toString() || '1');
   const [amenities, setAmenities] = useState<string[]>(existing?.amenities || []);
   const [available, setAvailable] = useState(existing?.status !== 'taken');
+  const [images, setImages] = useState<string[]>(existing?.images || []);
+  const [uploading, setUploading] = useState(false);
+
+  const pickImages = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsMultipleSelection: true,
+      quality: 0.8,
+    });
+    if (result.canceled) return;
+
+    setUploading(true);
+    try {
+      const urls: string[] = [];
+      for (const asset of result.assets) {
+        const url = await uploadImage(asset.uri, asset.fileName || 'photo.jpg');
+        urls.push(url);
+      }
+      setImages((prev) => [...prev, ...urls]);
+    } catch (err) {
+      Alert.alert('Upload failed', (err as Error).message);
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const toggleAmenity = (a: string) => {
     setAmenities((prev) =>
@@ -60,9 +88,9 @@ export function ListingFormScreen({ route, navigation }: Props) {
       bathrooms: parseFloat(bathrooms),
       amenities,
       status: available ? 'available' : 'taken',
-      images: existing?.images || [
-        'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=800',
-      ],
+      images: images.length
+        ? images
+        : ['https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=800'],
     };
 
     if (listingId) {
@@ -116,6 +144,17 @@ export function ListingFormScreen({ route, navigation }: Props) {
             onChangeText={setPrice}
             keyboardType="numeric"
           />
+          <Text style={styles.label}>Photos</Text>
+          <TouchableOpacity style={styles.photoBtn} onPress={pickImages} disabled={uploading}>
+            <Text style={styles.photoBtnText}>
+              {uploading ? 'Uploading...' : 'Add photos from gallery'}
+            </Text>
+          </TouchableOpacity>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photoRow}>
+            {images.map((uri) => (
+              <Image key={uri} source={{ uri }} style={styles.thumb} />
+            ))}
+          </ScrollView>
         </>
       )}
 
@@ -210,4 +249,16 @@ const styles = StyleSheet.create({
   toggleLabel: { fontSize: 16 },
   navRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg },
   navBtn: { flex: 1 },
+  photoBtn: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  photoBtnText: { color: colors.accent, fontWeight: '600' },
+  photoRow: { marginBottom: spacing.md },
+  thumb: { width: 72, height: 72, borderRadius: radius.sm, marginRight: spacing.sm },
 });
