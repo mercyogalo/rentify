@@ -1,15 +1,22 @@
+import { getIdToken } from './firebaseAuth';
+
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:4000';
 
 export async function apiRequest<T>(
   path: string,
   options: RequestInit & { token?: string } = {}
 ): Promise<T> {
-  const { token, ...fetchOptions } = options;
+  const { token: providedToken, ...fetchOptions } = options;
+  let token = providedToken;
+  if (!token) {
+    token = (await getIdToken()) || undefined;
+  }
+
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(fetchOptions.headers as Record<string, string>),
   };
-  if (token) headers.Authorization = `Bearer ${token}`;
+  if (token && token !== 'mock-token') headers.Authorization = `Bearer ${token}`;
 
   const res = await fetch(`${API_URL}${path}`, { ...fetchOptions, headers });
   const data = await res.json();

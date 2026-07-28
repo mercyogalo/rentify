@@ -21,7 +21,8 @@ import type { Listing, PropertyType } from '@rentify/shared-types';
 type Props = NativeStackScreenProps<AgentStackParamList, 'AddListing' | 'EditListing'>;
 
 export function ListingFormScreen({ route, navigation }: Props) {
-  const listingId = 'listingId' in route.params ? route.params.listingId : undefined;
+  const listingId =
+    route.params && 'listingId' in route.params ? route.params.listingId : undefined;
   const existing = useListingStore((s) =>
     listingId ? s.listings.find((l) => l.id === listingId) : undefined
   );

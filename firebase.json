@@ -1,0 +1,19 @@
+{
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "storage": {
+    "rules": "storage.rules"
+  },
+  "auth": {
+    "providers": {
+      "emailPassword": true,
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "Rentify",
+        "supportEmail": "support@rentify.com",
+        "authorizedDomains": ["localhost", "127.0.0.1"]
+      }
+    }
+  }
+}

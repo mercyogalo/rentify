@@ -2,13 +2,13 @@ import React, { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
-import { OnboardingScreen } from './screens/auth/OnboardingScreen';
-import { AuthNavigator } from './navigation/AuthNavigator';
-import { UserNavigator } from './navigation/UserNavigator';
-import { AgentNavigator } from './navigation/AgentNavigator';
-import { useAuthStore } from './store/authStore';
-import type { RootStackParamList } from './navigation/types';
-import { colors } from './theme';
+import { OnboardingScreen } from '../screens/auth/OnboardingScreen';
+import { AuthNavigator } from './AuthNavigator';
+import { UserNavigator } from './UserNavigator';
+import { AgentNavigator } from './AgentNavigator';
+import { useAuthStore } from '../store/authStore';
+import type { RootStackParamList } from './types';
+import { colors } from '../theme';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 

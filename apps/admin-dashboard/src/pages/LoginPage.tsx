@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminStore } from '../store/adminStore';
+import { isFirebaseConfigured } from '../services/firebase';
 
 export function LoginPage() {
   const [email, setEmail] = useState('');
@@ -8,6 +9,7 @@ export function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const login = useAdminStore((s) => s.login);
+  const loginWithGoogle = useAdminStore((s) => s.loginWithGoogle);
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -16,6 +18,19 @@ export function LoginPage() {
     setError('');
     try {
       await login(email, password);
+      navigate('/');
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogle = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      await loginWithGoogle();
       navigate('/');
     } catch (err) {
       setError((err as Error).message);
@@ -49,6 +64,17 @@ export function LoginPage() {
         <button className="btn btn-primary" style={{ width: '100%' }} disabled={loading}>
           {loading ? 'Signing in...' : 'Sign In'}
         </button>
+        {isFirebaseConfigured && (
+          <button
+            type="button"
+            className="btn btn-outline"
+            style={{ width: '100%', marginTop: 12 }}
+            disabled={loading}
+            onClick={handleGoogle}
+          >
+            Continue with Google
+          </button>
+        )}
       </form>
     </div>
   );

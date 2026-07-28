@@ -1,0 +1,50 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function userRole() {
+      return request.auth.token.role;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && userRole() == 'admin';
+    }
+
+    function isAgent() {
+      return isSignedIn() && userRole() == 'agent';
+    }
+
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isOwner(userId) && request.resource.data.role in ['user', 'agent'];
+      allow update: if isOwner(userId) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /listings/{listingId} {
+      allow read: if true;
+      allow create: if isAgent() && request.resource.data.agentId == request.auth.uid;
+      allow update, delete: if isAdmin() ||
+        (isAgent() && resource.data.agentId == request.auth.uid);
+    }
+
+    match /conversations/{conversationId} {
+      allow read, write: if isSignedIn() &&
+        (resource == null ||
+         request.auth.uid == resource.data.userId ||
+         request.auth.uid == resource.data.agentId);
+    }
+
+    match /messages/{messageId} {
+      allow read, create: if isSignedIn();
+    }
+  }
+}

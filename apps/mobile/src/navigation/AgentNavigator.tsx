@@ -38,14 +38,14 @@ function AgentTabs() {
         },
       })}
     >
-      <Tab.Screen name="Dashboard" component={AgentDashboardScreen} options={{ title: 'Home' }} />
+      <Tab.Screen name="Dashboard" component={AgentDashboardScreen as React.ComponentType} options={{ title: 'Home' }} />
       <Tab.Screen
         name="ManageListings"
-        component={ManageListingsScreen}
+        component={ManageListingsScreen as React.ComponentType}
         options={{ title: 'Listings' }}
       />
-      <Tab.Screen name="ChatList" component={ChatListScreen} options={{ title: 'Messages' }} />
-      <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: 'Profile' }} />
+      <Tab.Screen name="ChatList" component={ChatListScreen as React.ComponentType} options={{ title: 'Messages' }} />
+      <Tab.Screen name="Profile" component={ProfileScreen as React.ComponentType} options={{ title: 'Profile' }} />
     </Tab.Navigator>
   );
 }

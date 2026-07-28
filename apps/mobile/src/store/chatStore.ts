@@ -5,7 +5,9 @@ import { apiRequest } from '../services/api';
 import { getSocket } from '../services/socket';
 import { useAuthStore } from './authStore';
 
-const USE_MOCK = process.env.EXPO_PUBLIC_USE_MOCK !== 'false';
+import { isFirebaseConfigured } from '../services/firebase';
+
+const USE_MOCK = process.env.EXPO_PUBLIC_USE_MOCK === 'true' || !isFirebaseConfigured;
 
 interface ChatState {
   conversations: Conversation[];
@@ -22,7 +24,7 @@ interface ChatState {
 
 export const useChatStore = create<ChatState>((set, get) => ({
   conversations: USE_MOCK ? [...MOCK_CONVERSATIONS] : [],
-  messages: USE_MOCK ? { 'conv-1': [...MOCK_MESSAGES] } : {},
+  messages: USE_MOCK ? ({ 'conv-1': [...MOCK_MESSAGES] } as Record<string, Message[]>) : {},
   typingIn: {},
   isLoading: false,
 

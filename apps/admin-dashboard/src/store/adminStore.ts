@@ -1,5 +1,12 @@
 import { create } from 'zustand';
-import type { AdminStats, User, AuthResponse } from '@rentify/shared-types';
+import {
+  signInWithEmailAndPassword,
+  signOut,
+  GoogleAuthProvider,
+  signInWithPopup,
+} from 'firebase/auth';
+import type { User, AdminStats } from '@rentify/shared-types';
+import { auth, isFirebaseConfigured } from '../services/firebase';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -11,6 +18,7 @@ interface AdminState {
   agents: (User & { listingCount: number })[];
   listings: { id: string; title: string; price: number; status: string; city: string; agentName?: string }[];
   login: (email: string, password: string) => Promise<void>;
+  loginWithGoogle: () => Promise<void>;
   logout: () => void;
   fetchStats: () => Promise<void>;
   fetchUsers: (role?: string) => Promise<void>;
@@ -69,8 +77,19 @@ const mockStats: AdminStats = {
   ],
 };
 
+async function loginAndVerifyAdmin(email: string, password: string): Promise<{ token: string; user: User }> {
+  const cred = await signInWithEmailAndPassword(auth, email, password);
+  const token = await cred.user.getIdToken();
+  const { user } = await api<{ user: User }>('/api/auth/me', token);
+  if (user.role !== 'admin') {
+    await signOut(auth);
+    throw new Error('Admin access only');
+  }
+  return { token, user };
+}
+
 export const useAdminStore = create<AdminState>((set, get) => ({
-  token: localStorage.getItem('rentify_admin_token'),
+  token: isFirebaseConfigured ? null : 'mock-token',
   user: null,
   stats: null,
   users: [],
@@ -78,26 +97,34 @@ export const useAdminStore = create<AdminState>((set, get) => ({
   listings: [],
 
   login: async (email, password) => {
-    const res = await fetch(`${API_URL}/api/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    });
-    const data: AuthResponse & { error?: string } = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Login failed');
-    if (data.user.role !== 'admin') throw new Error('Admin access only');
-    localStorage.setItem('rentify_admin_token', data.token);
-    set({ token: data.token, user: data.user });
+    if (!isFirebaseConfigured) {
+      set({ token: 'mock-token', user: { id: 'admin', name: 'Admin', email, role: 'admin', createdAt: '', isSuspended: false } });
+      return;
+    }
+    const { token, user } = await loginAndVerifyAdmin(email, password);
+    set({ token, user });
+  },
+
+  loginWithGoogle: async () => {
+    const provider = new GoogleAuthProvider();
+    const cred = await signInWithPopup(auth, provider);
+    const token = await cred.user.getIdToken();
+    const { user } = await api<{ user: User }>('/api/auth/me', token);
+    if (user.role !== 'admin') {
+      await signOut(auth);
+      throw new Error('Admin access only');
+    }
+    set({ token, user });
   },
 
   logout: () => {
-    localStorage.removeItem('rentify_admin_token');
+    if (isFirebaseConfigured) signOut(auth);
     set({ token: null, user: null, stats: null });
   },
 
   fetchStats: async () => {
     const { token } = get();
-    if (!token) {
+    if (!token || token === 'mock-token') {
       set({ stats: mockStats });
       return;
     }
@@ -111,7 +138,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
 
   fetchUsers: async (role) => {
     const { token } = get();
-    if (!token) return;
+    if (!token || token === 'mock-token') return;
     const q = role ? `?role=${role}` : '';
     const { users } = await api<{ users: User[] }>(`/api/admin/users${q}`, token);
     set({ users });
@@ -119,21 +146,15 @@ export const useAdminStore = create<AdminState>((set, get) => ({
 
   fetchAgents: async () => {
     const { token } = get();
-    if (!token) return;
-    const { agents } = await api<{ agents: (User & { listingCount: number })[] }>(
-      '/api/admin/agents',
-      token
-    );
+    if (!token || token === 'mock-token') return;
+    const { agents } = await api<{ agents: (User & { listingCount: number })[] }>('/api/admin/agents', token);
     set({ agents });
   },
 
   fetchListings: async () => {
     const { token } = get();
-    if (!token) return;
-    const { listings } = await api<{ listings: AdminState['listings'] }>(
-      '/api/admin/listings',
-      token
-    );
+    if (!token || token === 'mock-token') return;
+    const { listings } = await api<{ listings: AdminState['listings'] }>('/api/admin/listings', token);
     set({ listings });
   },
 

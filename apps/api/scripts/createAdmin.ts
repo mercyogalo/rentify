@@ -1,44 +1,53 @@
 import dotenv from 'dotenv';
-import bcrypt from 'bcryptjs';
-import mongoose from 'mongoose';
-import { User } from '../src/models/User';
+import { initFirebase, getAuth } from '../src/config/firebase';
+import { db, now } from '../src/services/firestore';
+import type { FirestoreUser } from '../src/types/firestore';
 
 dotenv.config();
 
 async function createAdmin() {
   const email = process.env.ADMIN_EMAIL;
   const password = process.env.ADMIN_PASSWORD;
-  const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/rentify';
 
   if (!email || !password) {
     console.error('ADMIN_EMAIL and ADMIN_PASSWORD must be set in .env');
     process.exit(1);
   }
 
-  await mongoose.connect(mongoUri);
+  initFirebase();
+  const auth = getAuth();
 
-  const existing = await User.findOne({ email: email.toLowerCase() });
-  if (existing) {
-    if (existing.role === 'admin') {
-      console.log('Admin user already exists:', email);
-    } else {
-      existing.role = 'admin';
-      existing.passwordHash = await bcrypt.hash(password, 12);
-      await existing.save();
-      console.log('Upgraded existing user to admin:', email);
-    }
-  } else {
-    const passwordHash = await bcrypt.hash(password, 12);
-    await User.create({
-      name: 'Admin',
+  let userRecord;
+  try {
+    userRecord = await auth.getUserByEmail(email.toLowerCase());
+    await auth.updateUser(userRecord.uid, { password });
+    console.log('Updated existing Firebase user password');
+  } catch {
+    userRecord = await auth.createUser({
       email: email.toLowerCase(),
-      passwordHash,
-      role: 'admin',
+      password,
+      displayName: 'Admin',
     });
-    console.log('Admin user created:', email);
+    console.log('Created new Firebase admin user');
   }
 
-  await mongoose.disconnect();
+  await auth.setCustomUserClaims(userRecord.uid, { role: 'admin' });
+
+  const timestamp = now();
+  const profile: FirestoreUser = {
+    name: 'Admin',
+    email: email.toLowerCase(),
+    role: 'admin',
+    isSuspended: false,
+    rating: 0,
+    isVerified: true,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+
+  await db().collection('users').doc(userRecord.uid).set(profile, { merge: true });
+  console.log('Admin user ready:', email);
+  console.log('UID:', userRecord.uid);
 }
 
 createAdmin().catch((err) => {

@@ -10,7 +10,9 @@
     "api": "npm run dev --workspace=apps/api",
     "admin": "npm run dev --workspace=apps/admin-dashboard",
     "build:types": "npm run build --workspace=packages/shared-types",
-    "seed:admin": "npm run seed:admin --workspace=apps/api"
+    "seed:admin": "npm run seed:admin --workspace=apps/api",
+    "test": "npm run build:types && npm run test --workspace=apps/api && npm run test --workspace=apps/admin-dashboard",
+    "firebase:deploy": "npx -y firebase-tools@latest deploy --only firestore,storage,auth"
   },
   "devDependencies": {
     "typescript": "^5.4.5"

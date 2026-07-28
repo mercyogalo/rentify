@@ -1,10 +1,9 @@
 import { Router, Response } from 'express';
-import { User } from '../models/User';
-import { Listing } from '../models/Listing';
-import { Message } from '../models/Message';
-import { authenticate, requireRole, AuthenticatedRequest } from '../middleware/auth';
+import { db, getUserById } from '../services/firestore';
 import { toPublicUser } from '../utils/serializers';
+import { authenticate, requireRole, AuthenticatedRequest } from '../middleware/auth';
 import type { AdminStats, ListingStatus } from '@rentify/shared-types';
+import type { FirestoreListing, FirestoreUser } from '../types/firestore';
 
 const router = Router();
 
@@ -12,96 +11,62 @@ router.use(authenticate, requireRole('admin'));
 
 router.get('/stats', async (_req, res: Response) => {
   try {
+    const [usersSnap, listingsSnap, messagesSnap] = await Promise.all([
+      db().collection('users').get(),
+      db().collection('listings').get(),
+      db().collection('messages').get(),
+    ]);
+
     const now = new Date();
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     const todayStart = new Date(now.setHours(0, 0, 0, 0));
 
-    const [
-      totalUsers,
-      totalAgents,
-      totalListings,
-      statusCounts,
-      newSignupsThisWeek,
-      newSignupsThisMonth,
-      messagesSentToday,
-      userGrowth,
-      listingsByCity,
-      listingsByPropertyType,
-      agentListingCounts,
-    ] = await Promise.all([
-      User.countDocuments({ role: 'user' }),
-      User.countDocuments({ role: 'agent' }),
-      Listing.countDocuments(),
-      Listing.aggregate([{ $group: { _id: '$status', count: { $sum: 1 } } }]),
-      User.countDocuments({ createdAt: { $gte: weekAgo } }),
-      User.countDocuments({ createdAt: { $gte: monthAgo } }),
-      Message.countDocuments({ createdAt: { $gte: todayStart } }),
-      User.aggregate([
-        {
-          $group: {
-            _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
-            count: { $sum: 1 },
-          },
-        },
-        { $sort: { _id: 1 } },
-        { $limit: 30 },
-      ]),
-      Listing.aggregate([
-        { $group: { _id: '$location.city', count: { $sum: 1 } } },
-        { $sort: { count: -1 } },
-        { $limit: 10 },
-      ]),
-      Listing.aggregate([
-        { $group: { _id: '$propertyType', count: { $sum: 1 } } },
-        { $sort: { count: -1 } },
-      ]),
-      Listing.aggregate([
-        { $group: { _id: '$agentId', listingCount: { $sum: 1 } } },
-        { $sort: { listingCount: -1 } },
-        { $limit: 10 },
-      ]),
-    ]);
+    const users = usersSnap.docs.map((d) => ({ id: d.id, ...(d.data() as FirestoreUser) }));
+    const listings = listingsSnap.docs.map((d) => ({ id: d.id, ...(d.data() as FirestoreListing) }));
 
-    const listingsByStatus: Record<ListingStatus, number> = {
-      available: 0,
-      taken: 0,
-      pending: 0,
-    };
-    for (const item of statusCounts) {
-      listingsByStatus[item._id as ListingStatus] = item.count;
+    const listingsByStatus: Record<ListingStatus, number> = { available: 0, taken: 0, pending: 0 };
+    const cityMap = new Map<string, number>();
+    const typeMap = new Map<string, number>();
+    const agentMap = new Map<string, number>();
+
+    for (const l of listings) {
+      listingsByStatus[l.status]++;
+      cityMap.set(l.location.city, (cityMap.get(l.location.city) || 0) + 1);
+      typeMap.set(l.propertyType, (typeMap.get(l.propertyType) || 0) + 1);
+      agentMap.set(l.agentId, (agentMap.get(l.agentId) || 0) + 1);
     }
 
-    const agentIds = agentListingCounts.map((a) => a._id);
-    const agents = await User.find({ _id: { $in: agentIds } }).select('name');
+    const growthMap = new Map<string, number>();
+    for (const u of users) {
+      const date = u.createdAt.toDate().toISOString().slice(0, 10);
+      growthMap.set(date, (growthMap.get(date) || 0) + 1);
+    }
 
-    const mostActiveAgents = agentListingCounts.map((a) => {
-      const agent = agents.find((ag) => ag._id.toString() === a._id.toString());
-      return {
-        id: a._id.toString(),
-        name: agent?.name || 'Unknown',
-        listingCount: a.listingCount,
-        responseRate: Math.min(95, 60 + a.listingCount * 5),
-      };
-    });
+    const mostActiveAgents = [...agentMap.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([id, count]) => {
+        const agent = users.find((u) => u.id === id);
+        return {
+          id,
+          name: agent?.name || 'Unknown',
+          listingCount: count,
+          responseRate: Math.min(95, 60 + count * 5),
+        };
+      });
 
     const stats: AdminStats = {
-      totalUsers,
-      totalAgents,
-      totalListings,
+      totalUsers: users.filter((u) => u.role === 'user').length,
+      totalAgents: users.filter((u) => u.role === 'agent').length,
+      totalListings: listings.length,
       listingsByStatus,
-      newSignupsThisWeek,
-      newSignupsThisMonth,
-      messagesSentToday,
-      userGrowth: userGrowth.map((g) => ({ date: g._id, count: g.count })),
-      listingsByCity: listingsByCity.map((c) => ({
-        city: c._id,
-        count: c.count,
-      })),
-      listingsByPropertyType: listingsByPropertyType.map((p) => ({
-        type: p._id,
-        count: p.count,
-      })),
+      newSignupsThisWeek: users.filter((u) => u.createdAt.toDate() >= weekAgo).length,
+      newSignupsThisMonth: users.filter((u) => u.createdAt.toDate() >= monthAgo).length,
+      messagesSentToday: messagesSnap.docs.filter((d) => d.data().createdAt?.toDate() >= todayStart).length,
+      userGrowth: [...growthMap.entries()].sort((a, b) => a[0].localeCompare(b[0])).slice(-30).map(([date, count]) => ({ date, count })),
+      listingsByCity: [...cityMap.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10).map(([city, count]) => ({ city, count })),
+      listingsByPropertyType: [...typeMap.entries()].sort((a, b) => b[1] - a[1]).map(([type, count]) => ({ type, count })),
       mostActiveAgents,
     };
 
@@ -115,27 +80,22 @@ router.get('/stats', async (_req, res: Response) => {
 router.get('/users', async (req, res: Response) => {
   try {
     const { role } = req.query;
-    const query = role ? { role } : {};
-    const users = await User.find(query).sort({ createdAt: -1 }).limit(200);
-    res.json({ users: users.map(toPublicUser) });
+    let snap = await db().collection('users').orderBy('createdAt', 'desc').limit(200).get();
+    let users = snap.docs.map((d) => toPublicUser(d.id, d.data() as FirestoreUser));
+    if (role) users = users.filter((u) => u.role === role);
+    res.json({ users });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to fetch users' });
   }
 });
 
-router.patch('/users/:id/suspend', async (req: AuthenticatedRequest, res: Response) => {
+router.patch('/users/:id/suspend', async (req, res: Response) => {
   try {
-    const user = await User.findByIdAndUpdate(
-      req.params.id,
-      { isSuspended: req.body.isSuspended ?? true },
-      { new: true }
-    );
-    if (!user) {
-      res.status(404).json({ error: 'User not found' });
-      return;
-    }
-    res.json({ user: toPublicUser(user) });
+    const ref = db().collection('users').doc(req.params.id);
+    await ref.update({ isSuspended: req.body.isSuspended ?? true });
+    const doc = await ref.get();
+    res.json({ user: toPublicUser(doc.id, doc.data() as FirestoreUser) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to update user' });
@@ -144,7 +104,7 @@ router.patch('/users/:id/suspend', async (req: AuthenticatedRequest, res: Respon
 
 router.delete('/users/:id', async (req, res: Response) => {
   try {
-    await User.findByIdAndDelete(req.params.id);
+    await db().collection('users').doc(req.params.id).delete();
     res.json({ success: true });
   } catch (err) {
     console.error(err);
@@ -154,18 +114,19 @@ router.delete('/users/:id', async (req, res: Response) => {
 
 router.get('/agents', async (_req, res: Response) => {
   try {
-    const agents = await User.find({ role: 'agent' }).sort({ createdAt: -1 });
-    const listingCounts = await Listing.aggregate([
-      { $group: { _id: '$agentId', count: { $sum: 1 } } },
+    const [usersSnap, listingsSnap] = await Promise.all([
+      db().collection('users').where('role', '==', 'agent').get(),
+      db().collection('listings').get(),
     ]);
-    const countMap = new Map(
-      listingCounts.map((l) => [l._id.toString(), l.count])
-    );
-
+    const countMap = new Map<string, number>();
+    listingsSnap.docs.forEach((d) => {
+      const agentId = (d.data() as FirestoreListing).agentId;
+      countMap.set(agentId, (countMap.get(agentId) || 0) + 1);
+    });
     res.json({
-      agents: agents.map((a) => ({
-        ...toPublicUser(a),
-        listingCount: countMap.get(a._id.toString()) || 0,
+      agents: usersSnap.docs.map((d) => ({
+        ...toPublicUser(d.id, d.data() as FirestoreUser),
+        listingCount: countMap.get(d.id) || 0,
       })),
     });
   } catch (err) {
@@ -176,16 +137,10 @@ router.get('/agents', async (_req, res: Response) => {
 
 router.patch('/agents/:id/verify', async (req, res: Response) => {
   try {
-    const user = await User.findByIdAndUpdate(
-      req.params.id,
-      { isVerified: req.body.isVerified ?? true },
-      { new: true }
-    );
-    if (!user) {
-      res.status(404).json({ error: 'Agent not found' });
-      return;
-    }
-    res.json({ agent: toPublicUser(user) });
+    const ref = db().collection('users').doc(req.params.id);
+    await ref.update({ isVerified: req.body.isVerified ?? true });
+    const doc = await ref.get();
+    res.json({ agent: toPublicUser(doc.id, doc.data() as FirestoreUser) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to update agent' });
@@ -195,31 +150,30 @@ router.patch('/agents/:id/verify', async (req, res: Response) => {
 router.get('/listings', async (req, res: Response) => {
   try {
     const { search, status } = req.query;
-    const query: Record<string, unknown> = {};
-    if (status) query.status = status;
+    const snap = await db().collection('listings').orderBy('createdAt', 'desc').limit(200).get();
+    let listings = snap.docs.map((d) => ({ id: d.id, ...(d.data() as FirestoreListing) }));
+    if (status) listings = listings.filter((l) => l.status === status);
     if (search) {
-      query.$or = [
-        { title: new RegExp(String(search), 'i') },
-        { 'location.city': new RegExp(String(search), 'i') },
-      ];
+      const q = String(search).toLowerCase();
+      listings = listings.filter(
+        (l) => l.title.toLowerCase().includes(q) || l.location.city.toLowerCase().includes(q)
+      );
     }
-
-    const listings = await Listing.find(query)
-      .populate('agentId', 'name email')
-      .sort({ createdAt: -1 })
-      .limit(200);
-
-    res.json({
-      listings: listings.map((l) => ({
-        id: l._id.toString(),
-        title: l.title,
-        price: l.price,
-        status: l.status,
-        city: l.location.city,
-        agentName: (l.agentId as unknown as InstanceType<typeof User>)?.name,
-        createdAt: l.createdAt.toISOString(),
-      })),
-    });
+    const results = await Promise.all(
+      listings.map(async (l) => {
+        const agent = await getUserById(l.agentId);
+        return {
+          id: l.id,
+          title: l.title,
+          price: l.price,
+          status: l.status,
+          city: l.location.city,
+          agentName: agent?.name,
+          createdAt: l.createdAt.toDate().toISOString(),
+        };
+      })
+    );
+    res.json({ listings: results });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to fetch listings' });
@@ -228,7 +182,7 @@ router.get('/listings', async (req, res: Response) => {
 
 router.delete('/listings/:id', async (req, res: Response) => {
   try {
-    await Listing.findByIdAndDelete(req.params.id);
+    await db().collection('listings').doc(req.params.id).delete();
     res.json({ success: true });
   } catch (err) {
     console.error(err);

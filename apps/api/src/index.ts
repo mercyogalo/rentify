@@ -1,7 +1,6 @@
 import express from 'express';
 import cors from 'cors';
 import http from 'http';
-import passport from 'passport';
 import { connectDB } from './config/db';
 import { env } from './config/env';
 import { initSocket } from './socket';
@@ -17,10 +16,9 @@ const server = http.createServer(app);
 
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
-app.use(passport.initialize());
 
 app.get('/health', (_req, res) => {
-  res.json({ status: 'ok' });
+  res.json({ status: 'ok', backend: 'firebase' });
 });
 
 app.use('/api/auth', authRoutes);
@@ -36,7 +34,7 @@ async function start() {
   try {
     await connectDB();
     server.listen(env.port, () => {
-      console.log(`Rentify API running on http://localhost:${env.port}`);
+      console.log(`Rentify API (Firebase) running on http://localhost:${env.port}`);
     });
   } catch (err) {
     console.error('Failed to start server:', err);

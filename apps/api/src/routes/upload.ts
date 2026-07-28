@@ -1,19 +1,12 @@
 import { Router, Response } from 'express';
 import multer from 'multer';
-import { v2 as cloudinary } from 'cloudinary';
-import { authenticate, AuthenticatedRequest } from '../middleware/auth';
+import { v4 as uuidv4 } from 'uuid';
+import { getStorage } from '../config/firebase';
 import { env } from '../config/env';
+import { authenticate, AuthenticatedRequest } from '../middleware/auth';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
-
-if (env.cloudinary.cloudName) {
-  cloudinary.config({
-    cloud_name: env.cloudinary.cloudName,
-    api_key: env.cloudinary.apiKey,
-    api_secret: env.cloudinary.apiSecret,
-  });
-}
 
 router.post(
   '/',
@@ -26,24 +19,21 @@ router.post(
         return;
       }
 
-      if (!env.cloudinary.cloudName) {
+      const bucket = getStorage().bucket(env.firebase.storageBucket || undefined);
+      if (!env.firebase.storageBucket) {
         const placeholder = `https://picsum.photos/seed/${Date.now()}/800/600`;
         res.json({ url: placeholder });
         return;
       }
 
-      const result = await new Promise<{ secure_url: string }>((resolve, reject) => {
-        const stream = cloudinary.uploader.upload_stream(
-          { folder: 'rentify' },
-          (err, result) => {
-            if (err || !result) reject(err);
-            else resolve(result);
-          }
-        );
-        stream.end(req.file!.buffer);
+      const filename = `listings/${req.auth!.userId}/${uuidv4()}-${req.file.originalname}`;
+      const file = bucket.file(filename);
+      await file.save(req.file.buffer, {
+        metadata: { contentType: req.file.mimetype },
       });
-
-      res.json({ url: result.secure_url });
+      await file.makePublic();
+      const url = `https://storage.googleapis.com/${bucket.name}/${filename}`;
+      res.json({ url });
     } catch (err) {
       console.error(err);
       res.status(500).json({ error: 'Upload failed' });

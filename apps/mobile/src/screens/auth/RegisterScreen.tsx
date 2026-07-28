@@ -62,7 +62,7 @@ export function RegisterScreen({ navigation }: Props) {
               onPress={() => setRole(r)}
             >
               <Text style={[styles.roleText, role === r && styles.roleTextActive]}>
-                {r === 'user' ? 'Looking for a home' : 'I'm an Agent'}
+                {r === 'user' ? 'Looking for a home' : 'Agent / Landlord'}
               </Text>
             </TouchableOpacity>
           ))}

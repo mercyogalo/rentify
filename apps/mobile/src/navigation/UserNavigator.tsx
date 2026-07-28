@@ -39,10 +39,10 @@ function UserTabs() {
         },
       })}
     >
-      <Tab.Screen name="Home" component={HomeScreen} options={{ title: 'Discover' }} />
-      <Tab.Screen name="Favorites" component={FavoritesScreen} options={{ title: 'Saved' }} />
-      <Tab.Screen name="ChatList" component={ChatListScreen} options={{ title: 'Messages' }} />
-      <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: 'Profile' }} />
+      <Tab.Screen name="Home" component={HomeScreen as React.ComponentType} options={{ title: 'Discover' }} />
+      <Tab.Screen name="Favorites" component={FavoritesScreen as React.ComponentType} options={{ title: 'Saved' }} />
+      <Tab.Screen name="ChatList" component={ChatListScreen as React.ComponentType} options={{ title: 'Messages' }} />
+      <Tab.Screen name="Profile" component={ProfileScreen as React.ComponentType} options={{ title: 'Profile' }} />
     </Tab.Navigator>
   );
 }

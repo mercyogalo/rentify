@@ -4,7 +4,9 @@ import { MOCK_LISTINGS } from '../data/mockData';
 import { apiRequest } from '../services/api';
 import { useAuthStore } from './authStore';
 
-const USE_MOCK = process.env.EXPO_PUBLIC_USE_MOCK !== 'false';
+import { isFirebaseConfigured } from '../services/firebase';
+
+const USE_MOCK = process.env.EXPO_PUBLIC_USE_MOCK === 'true' || !isFirebaseConfigured;
 
 interface ListingState {
   listings: Listing[];

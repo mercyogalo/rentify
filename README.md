@@ -2,100 +2,92 @@
 
 A marketplace connecting home seekers with real estate agents. Monorepo with:
 
-- **`apps/mobile`** — Expo React Native app (User + Agent flows)
+- **`apps/mobile`** — Expo React Native app (User + Agent/Landlord flows)
 - **`apps/admin-dashboard`** — React + Vite admin panel
-- **`apps/api`** — Node/Express + MongoDB API with Socket.io
+- **`apps/api`** — Node/Express API backed by **Firebase** (Auth, Firestore, Storage)
 - **`packages/shared-types`** — Shared TypeScript interfaces
 
 ## Tech Stack
 
 | Layer | Stack |
 |-------|-------|
-| Mobile | Expo, React Navigation, Zustand, TypeScript |
-| Admin | React, Vite, Recharts, Zustand |
-| API | Express, Mongoose, JWT, Passport Google OAuth, Socket.io, Cloudinary |
-| Design | Minimal monochrome UI, deep green accent (`#1B4332`) |
+| Mobile | Expo, React Navigation, Zustand, Firebase Auth + Google Sign-In |
+| Admin | React, Vite, Recharts, Firebase Auth + Google Sign-In |
+| Backend | Express, **Firebase Admin** (Firestore, Auth, Storage), Socket.io |
+| Auth | Firebase Authentication (email/password + Google OAuth) |
+
+## Firebase Setup
+
+1. Create a Firebase project at [console.firebase.google.com](https://console.firebase.google.com)
+2. Enable **Authentication** → Email/Password and **Google** sign-in
+3. Create a **Firestore** database and **Storage** bucket
+4. Download a **service account key** (Project Settings → Service Accounts) for the API
+5. Copy env files and fill in credentials:
+
+```bash
+cp apps/api/.env.example apps/api/.env
+cp apps/mobile/.env.example apps/mobile/.env
+cp apps/admin-dashboard/.env.example apps/admin-dashboard/.env
+```
+
+6. Deploy security rules:
+
+```bash
+npx -y firebase-tools@latest login
+npx -y firebase-tools@latest use your-project-id
+npm run firebase:deploy
+```
+
+7. Create admin account:
+
+```bash
+npm run seed:admin
+```
 
 ## Quick Start
 
 ```bash
-# Install dependencies
 npm install
-
-# Build shared types
 npm run build:types
-
-# Start API (requires MongoDB)
-cp apps/api/.env.example apps/api/.env
-npm run api
-
-# Start mobile app (mock mode by default)
-npm run mobile
-
-# Start admin dashboard
-npm run admin
+npm run api      # Express API (Firebase backend)
+npm run mobile   # Expo app
+npm run admin    # Admin dashboard
+npm run test     # Type-check all packages
 ```
 
-## Mock Mode (Mobile)
+## Auth Flow
 
-The mobile app runs in **mock mode** by default (`EXPO_PUBLIC_USE_MOCK` unset or not `false`). This lets you explore all screens without a running backend.
+- **Mobile/Admin** authenticate via Firebase Auth (email/password or Google)
+- Clients send Firebase **ID tokens** as `Authorization: Bearer <token>` to the API
+- User profiles (role, phone, agency info) are stored in Firestore `users/{uid}`
+- Admin role is set via custom claims + seed script (not self-registerable)
+- Signup role options: **Looking for a home** or **Agent / Landlord**
 
-**Demo login:** use any email — include `agent` in the address to log in as an agent (e.g. `agent@test.com`).
+## Mock Mode
 
-To connect to the real API:
-
-```bash
-# apps/mobile/.env
-EXPO_PUBLIC_API_URL=http://localhost:4000
-EXPO_PUBLIC_USE_MOCK=false
-```
-
-## Admin Setup
-
-Admin accounts are **not** self-registered. Create one via the seed script:
-
-```bash
-# Set ADMIN_EMAIL and ADMIN_PASSWORD in apps/api/.env
-npm run seed:admin
-```
-
-Then log in at `http://localhost:5173/login` using the same `/api/auth/login` endpoint.
+If Firebase env vars are missing, the mobile app falls back to mock data. Set `EXPO_PUBLIC_USE_MOCK=true` to force mock mode.
 
 ## Project Structure
 
 ```
 rentify/
+├── firebase.json          # Firebase rules & auth config
+├── firestore.rules
+├── storage.rules
 ├── apps/
-│   ├── mobile/           # Expo RN app
-│   ├── admin-dashboard/  # Web admin panel
-│   └── api/              # Express backend
-├── packages/
-│   └── shared-types/     # User, Listing, Conversation, Message types
-└── package.json          # npm workspaces root
+│   ├── mobile/
+│   ├── admin-dashboard/
+│   └── api/
+└── packages/shared-types/
 ```
-
-## Key Features Implemented
-
-- Role-based navigation (User tabs vs Agent tabs after login)
-- Onboarding → Auth → Home flow
-- Listing feed with search + AND-combined filters
-- House detail with map, amenities, agent card, contact → chat
-- Real-time chat UI with listing context banner + "taken" sync
-- Agent dashboard, multi-step listing form, manage listings
-- Admin analytics (line/bar/pie charts), user/agent/listing tables
-- JWT auth, role middleware, Google OAuth hooks, Socket.io rooms
-- Cloudinary upload route (falls back to placeholder when unconfigured)
-
-## Environment Variables
-
-See `apps/api/.env.example` for API config. Admin dashboard uses `VITE_API_URL` (default `http://localhost:4000`).
 
 ## Scripts
 
 | Command | Description |
 |---------|-------------|
 | `npm run mobile` | Start Expo dev server |
-| `npm run api` | Start Express API with hot reload |
-| `npm run admin` | Start Vite admin dashboard |
-| `npm run seed:admin` | Create admin user from env vars |
-| `npm run build:types` | Compile shared-types package |
+| `npm run api` | Start Express API |
+| `npm run admin` | Start admin dashboard |
+| `npm run seed:admin` | Create Firebase admin user |
+| `npm run test` | Type-check all packages |
+| `npm run firebase:deploy` | Deploy Firestore/Storage/Auth rules |

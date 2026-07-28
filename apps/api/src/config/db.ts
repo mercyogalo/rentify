@@ -1,7 +1,6 @@
-import mongoose from 'mongoose';
-import { env } from './env';
+import { initFirebase } from './firebase';
 
 export async function connectDB(): Promise<void> {
-  await mongoose.connect(env.mongoUri);
-  console.log('MongoDB connected');
+  initFirebase();
+  console.log('Firebase Admin initialized');
 }

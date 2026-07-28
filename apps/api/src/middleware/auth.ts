@@ -1,8 +1,26 @@
 import { Request, Response, NextFunction } from 'express';
-import { verifyToken, JwtPayload } from '../utils/jwt';
+import { getAuth, getFirestore } from '../config/firebase';
+import type { UserRole } from '@rentify/shared-types';
+
+export interface AuthPayload {
+  userId: string;
+  role: UserRole;
+  email?: string;
+}
 
 export interface AuthenticatedRequest extends Request {
-  auth?: JwtPayload;
+  auth?: AuthPayload;
+}
+
+async function resolveRole(uid: string, tokenRole?: string): Promise<UserRole> {
+  if (tokenRole === 'admin' || tokenRole === 'agent' || tokenRole === 'user') {
+    return tokenRole;
+  }
+  const doc = await getFirestore().collection('users').doc(uid).get();
+  if (doc.exists) {
+    return (doc.data()?.role as UserRole) || 'user';
+  }
+  return 'user';
 }
 
 export function authenticate(
@@ -16,13 +34,21 @@ export function authenticate(
     return;
   }
 
-  try {
-    const token = header.slice(7);
-    (req as AuthenticatedRequest).auth = verifyToken(token);
-    next();
-  } catch {
-    res.status(401).json({ error: 'Invalid or expired token' });
-  }
+  const token = header.slice(7);
+  getAuth()
+    .verifyIdToken(token)
+    .then(async (decoded) => {
+      const role = await resolveRole(decoded.uid, decoded.role as string | undefined);
+      (req as AuthenticatedRequest).auth = {
+        userId: decoded.uid,
+        role,
+        email: decoded.email,
+      };
+      next();
+    })
+    .catch(() => {
+      res.status(401).json({ error: 'Invalid or expired token' });
+    });
 }
 
 export function requireRole(...roles: string[]) {

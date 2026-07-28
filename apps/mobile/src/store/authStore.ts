@@ -1,11 +1,18 @@
 import { create } from 'zustand';
-import * as SecureStore from 'expo-secure-store';
-import type { User, AuthResponse, RegisterRequest } from '@rentify/shared-types';
-import { apiRequest } from '../services/api';
+import type { User, RegisterRequest } from '@rentify/shared-types';
+import {
+  registerWithEmail,
+  loginWithEmail,
+  loginWithGoogleIdToken,
+  logoutFirebase,
+  fetchProfile,
+  getIdToken,
+  subscribeAuth,
+  isFirebaseConfigured,
+} from '../services/firebaseAuth';
 import { connectSocket, disconnectSocket } from '../services/socket';
 
-const TOKEN_KEY = 'rentify_token';
-const USE_MOCK = process.env.EXPO_PUBLIC_USE_MOCK !== 'false';
+const USE_MOCK = process.env.EXPO_PUBLIC_USE_MOCK === 'true' || !isFirebaseConfigured;
 
 interface AuthState {
   user: User | null;
@@ -15,11 +22,12 @@ interface AuthState {
   hasSeenOnboarding: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (data: RegisterRequest) => Promise<void>;
+  loginWithGoogle: (idToken: string) => Promise<{ isNew: boolean }>;
   logout: () => Promise<void>;
   initialize: () => Promise<void>;
   setHasSeenOnboarding: (value: boolean) => void;
   updateUser: (user: User) => void;
-  mockLogin: (role: 'user' | 'agent') => void;
+  refreshToken: () => Promise<string | null>;
 }
 
 const mockUsers: Record<string, User> = {
@@ -58,19 +66,29 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   hasSeenOnboarding: false,
 
   initialize: async () => {
-    try {
-      const token = await SecureStore.getItemAsync(TOKEN_KEY);
-      if (token && !USE_MOCK) {
-        const { user } = await apiRequest<{ user: User }>('/api/auth/me', { token });
-        connectSocket(token);
-        set({ user, token, isInitialized: true });
-      } else {
-        set({ isInitialized: true });
-      }
-    } catch {
-      await SecureStore.deleteItemAsync(TOKEN_KEY);
+    if (USE_MOCK) {
       set({ isInitialized: true });
+      return;
     }
+
+    return new Promise<void>((resolve) => {
+      const unsub = subscribeAuth(async (firebaseUser) => {
+        if (firebaseUser) {
+          try {
+            const token = await firebaseUser.getIdToken();
+            const user = await fetchProfile(token);
+            connectSocket(token);
+            set({ user, token, isInitialized: true });
+          } catch {
+            set({ user: null, token: null, isInitialized: true });
+          }
+        } else {
+          set({ user: null, token: null, isInitialized: true });
+        }
+        resolve();
+        unsub();
+      });
+    });
   },
 
   login: async (email, password) => {
@@ -78,17 +96,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       if (USE_MOCK) {
         const role = email.includes('agent') ? 'agent' : 'user';
-        const user = mockUsers[role];
-        set({ user, token: 'mock-token', isLoading: false });
+        set({ user: mockUsers[role], token: 'mock-token', isLoading: false });
         return;
       }
-      const res = await apiRequest<AuthResponse>('/api/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ email, password }),
-      });
-      await SecureStore.setItemAsync(TOKEN_KEY, res.token);
-      connectSocket(res.token);
-      set({ user: res.user, token: res.token, isLoading: false });
+      const { user, token } = await loginWithEmail(email, password);
+      connectSocket(token);
+      set({ user, token, isLoading: false });
     } catch (err) {
       set({ isLoading: false });
       throw err;
@@ -114,13 +127,22 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         set({ user, token: 'mock-token', isLoading: false });
         return;
       }
-      const res = await apiRequest<AuthResponse>('/api/auth/register', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      });
-      await SecureStore.setItemAsync(TOKEN_KEY, res.token);
-      connectSocket(res.token);
-      set({ user: res.user, token: res.token, isLoading: false });
+      const { user, token } = await registerWithEmail(data);
+      connectSocket(token);
+      set({ user, token, isLoading: false });
+    } catch (err) {
+      set({ isLoading: false });
+      throw err;
+    }
+  },
+
+  loginWithGoogle: async (idToken) => {
+    set({ isLoading: true });
+    try {
+      const { user, token, isNew } = await loginWithGoogleIdToken(idToken);
+      connectSocket(token);
+      set({ user, token, isLoading: false });
+      return { isNew };
     } catch (err) {
       set({ isLoading: false });
       throw err;
@@ -128,7 +150,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   logout: async () => {
-    await SecureStore.deleteItemAsync(TOKEN_KEY);
+    if (!USE_MOCK) await logoutFirebase();
     disconnectSocket();
     set({ user: null, token: null });
   },
@@ -137,7 +159,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   updateUser: (user) => set({ user }),
 
-  mockLogin: (role) => {
-    set({ user: mockUsers[role], token: 'mock-token' });
+  refreshToken: async () => {
+    const token = await getIdToken();
+    if (token) set({ token });
+    return token;
   },
 }));
