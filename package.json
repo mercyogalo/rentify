@@ -1,12 +1,14 @@
 {
   "name": "rentify",
   "private": true,
+  "main": "index.ts",
   "workspaces": [
     "apps/*",
     "packages/*"
   ],
   "scripts": {
     "mobile": "npm run start --workspace=apps/mobile",
+    "mobile:tunnel": "npm run start:tunnel --workspace=apps/mobile",
     "api": "npm run dev --workspace=apps/api",
     "admin": "npm run dev --workspace=apps/admin-dashboard",
     "build:types": "npm run build --workspace=packages/shared-types",

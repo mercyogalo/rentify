@@ -31,18 +31,20 @@ export function RootNavigator() {
   return (
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {!hasSeenOnboarding && !user && (
+        {!user && !hasSeenOnboarding && (
           <Stack.Screen name="Onboarding">
             {() => (
               <OnboardingScreen onComplete={() => setHasSeenOnboarding(true)} />
             )}
           </Stack.Screen>
         )}
-        {!user ? (
+        {!user && hasSeenOnboarding && (
           <Stack.Screen name="Auth" component={AuthNavigator} />
-        ) : user.role === 'agent' ? (
+        )}
+        {user?.role === 'agent' && (
           <Stack.Screen name="AgentApp" component={AgentNavigator} />
-        ) : (
+        )}
+        {user && user.role !== 'agent' && (
           <Stack.Screen name="UserApp" component={UserNavigator} />
         )}
       </Stack.Navigator>
