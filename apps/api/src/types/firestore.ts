@@ -23,12 +23,7 @@ export interface FirestoreListing {
   description: string;
   images: string[];
   price: number;
-  location: {
-    address: string;
-    city: string;
-    lat: number;
-    lng: number;
-  };
+  location: string;
   propertyType: PropertyType;
   bedrooms: number;
   bathrooms: number;

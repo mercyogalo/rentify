@@ -13,7 +13,7 @@ export const env = {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
     region: process.env.AWS_REGION || 'eu-north-1',
-    bucket: process.env.AWS_S3_BUCKET || process.env.AWS_BUCKET_NAME || '',
+    bucket: process.env.AWS_BUCKET_NAME || process.env.AWS_S3_BUCKET || '',
     publicUrlBase: process.env.AWS_S3_PUBLIC_URL_BASE || '',
   },
   clientUrl: process.env.CLIENT_URL || 'http://localhost:5173',

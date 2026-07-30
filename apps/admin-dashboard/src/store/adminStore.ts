@@ -16,7 +16,7 @@ interface AdminState {
   stats: AdminStats | null;
   users: User[];
   agents: (User & { listingCount: number })[];
-  listings: { id: string; title: string; price: number; status: string; city: string; agentName?: string }[];
+  listings: { id: string; title: string; price: number; status: string; location: string; agentName?: string }[];
   login: (email: string, password: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
   logout: () => void;

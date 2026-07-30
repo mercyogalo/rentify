@@ -8,6 +8,19 @@ import { isFirebaseConfigured } from '../services/firebase';
 
 const USE_MOCK = process.env.EXPO_PUBLIC_USE_MOCK === 'true' || !isFirebaseConfigured;
 
+export type ListingInput = {
+  title: string;
+  description: string;
+  price: number;
+  location: string;
+  propertyType: Listing['propertyType'];
+  bedrooms: number;
+  bathrooms: number;
+  amenities: string[];
+  status: ListingStatus;
+  images: string[];
+};
+
 interface ListingState {
   listings: Listing[];
   favorites: string[];
@@ -18,10 +31,10 @@ interface ListingState {
   setFilters: (filters: Partial<ListingFilters>) => void;
   resetFilters: () => void;
   toggleFavorite: (id: string) => void;
-  updateListingStatus: (id: string, status: ListingStatus) => void;
-  addListing: (listing: Listing) => void;
-  updateListing: (id: string, updates: Partial<Listing>) => void;
-  deleteListing: (id: string) => void;
+  updateListingStatus: (id: string, status: ListingStatus) => Promise<void>;
+  addListing: (data: ListingInput) => Promise<Listing>;
+  updateListing: (id: string, updates: Partial<ListingInput>) => Promise<void>;
+  deleteListing: (id: string) => Promise<void>;
   getFilteredListings: () => Listing[];
   getFavoriteListings: () => Listing[];
 }
@@ -34,7 +47,7 @@ function applyFilters(listings: Listing[], filters: ListingFilters): Listing[] {
   return listings.filter((l) => {
     if (!filters.includeTaken && l.status !== 'available' && !filters.status) return false;
     if (filters.status && l.status !== filters.status) return false;
-    if (filters.city && !l.location.city.toLowerCase().includes(filters.city.toLowerCase()))
+    if (filters.city && !l.location.toLowerCase().includes(filters.city.toLowerCase()))
       return false;
     if (filters.minPrice && l.price < filters.minPrice) return false;
     if (filters.maxPrice && l.price > filters.maxPrice) return false;
@@ -44,8 +57,7 @@ function applyFilters(listings: Listing[], filters: ListingFilters): Listing[] {
       const q = filters.search.toLowerCase();
       const match =
         l.title.toLowerCase().includes(q) ||
-        l.location.city.toLowerCase().includes(q) ||
-        l.location.address.toLowerCase().includes(q);
+        l.location.toLowerCase().includes(q);
       if (!match) return false;
     }
     return true;
@@ -115,21 +127,79 @@ export const useListingStore = create<ListingState>((set, get) => ({
         : [...s.favorites, id],
     })),
 
-  updateListingStatus: (id, status) =>
+  updateListingStatus: async (id, status) => {
+    if (!USE_MOCK) {
+      const token = useAuthStore.getState().token!;
+      await apiRequest(`/api/listings/${id}`, {
+        method: 'PATCH',
+        token,
+        body: JSON.stringify({ status }),
+      });
+    }
     set((s) => ({
       listings: s.listings.map((l) => (l.id === id ? { ...l, status } : l)),
-    })),
+    }));
+  },
 
-  addListing: (listing) =>
-    set((s) => ({ listings: [listing, ...s.listings] })),
+  addListing: async (data) => {
+    if (USE_MOCK) {
+      const user = useAuthStore.getState().user!;
+      const listing: Listing = {
+        id: `listing-${Date.now()}`,
+        agentId: user.id,
+        ...data,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        agent: {
+          id: user.id,
+          name: user.name,
+          avatar: user.avatar,
+          rating: user.rating,
+          agencyName: user.agencyName,
+        },
+      };
+      set((s) => ({ listings: [listing, ...s.listings] }));
+      return listing;
+    }
 
-  updateListing: (id, updates) =>
+    const token = useAuthStore.getState().token!;
+    const { listing } = await apiRequest<{ listing: Listing }>('/api/listings', {
+      method: 'POST',
+      token,
+      body: JSON.stringify(data),
+    });
+    set((s) => ({ listings: [listing, ...s.listings] }));
+    return listing;
+  },
+
+  updateListing: async (id, updates) => {
+    if (!USE_MOCK) {
+      const token = useAuthStore.getState().token!;
+      const { listing } = await apiRequest<{ listing: Listing }>(`/api/listings/${id}`, {
+        method: 'PATCH',
+        token,
+        body: JSON.stringify(updates),
+      });
+      set((s) => ({
+        listings: s.listings.map((l) => (l.id === id ? listing : l)),
+      }));
+      return;
+    }
+
     set((s) => ({
-      listings: s.listings.map((l) => (l.id === id ? { ...l, ...updates } : l)),
-    })),
+      listings: s.listings.map((l) =>
+        l.id === id ? { ...l, ...updates, updatedAt: new Date().toISOString() } : l
+      ),
+    }));
+  },
 
-  deleteListing: (id) =>
-    set((s) => ({ listings: s.listings.filter((l) => l.id !== id) })),
+  deleteListing: async (id) => {
+    if (!USE_MOCK) {
+      const token = useAuthStore.getState().token!;
+      await apiRequest(`/api/listings/${id}`, { method: 'DELETE', token });
+    }
+    set((s) => ({ listings: s.listings.filter((l) => l.id !== id) }));
+  },
 
   getFilteredListings: () => applyFilters(get().listings, get().filters),
 

@@ -11,7 +11,6 @@ import {
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../../components/Button';
-import { ListingMap } from '../../components/ListingMap';
 import { useListingStore } from '../../store/listingStore';
 import { useChatStore } from '../../store/chatStore';
 import { colors, spacing, typography, radius } from '../../theme';
@@ -67,9 +66,7 @@ export function HouseDetailScreen({ route, navigation }: Props) {
         </View>
 
         <Text style={styles.title}>{listing.title}</Text>
-        <Text style={styles.location}>
-          {listing.location.address}, {listing.location.city}
-        </Text>
+        <Text style={styles.location}>{listing.location}</Text>
         <Text style={styles.meta}>
           {listing.bedrooms} bed · {listing.bathrooms} bath · {listing.propertyType}
         </Text>
@@ -86,12 +83,6 @@ export function HouseDetailScreen({ route, navigation }: Props) {
           ))}
         </View>
 
-        <Text style={styles.sectionTitle}>Location</Text>
-        <ListingMap
-          latitude={listing.location.lat}
-          longitude={listing.location.lng}
-          style={styles.map}
-        />
 
         {listing.agent && (
           <TouchableOpacity
@@ -152,7 +143,6 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   amenityText: { fontSize: 13, color: colors.text },
-  map: { height: 180, borderRadius: radius.lg, marginTop: spacing.sm },
   agentCard: {
     flexDirection: 'row',
     alignItems: 'center',

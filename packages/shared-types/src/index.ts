@@ -10,13 +10,6 @@ export type PropertyType =
   | 'studio'
   | 'other';
 
-export interface Location {
-  address: string;
-  city: string;
-  lat: number;
-  lng: number;
-}
-
 export interface User {
   id: string;
   name: string;
@@ -40,7 +33,7 @@ export interface Listing {
   description: string;
   images: string[];
   price: number;
-  location: Location;
+  location: string;
   propertyType: PropertyType;
   bedrooms: number;
   bathrooms: number;
@@ -88,6 +81,8 @@ export interface RegisterRequest {
   phone: string;
   password: string;
   role: 'user' | 'agent';
+  avatar?: string;
+  avatarFileUri?: string;
   agencyName?: string;
   licenseNumber?: string;
   bio?: string;

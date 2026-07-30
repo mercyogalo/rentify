@@ -6,6 +6,7 @@ import type { AuthenticatedRequest } from '../middleware/auth';
 import { authenticate } from '../middleware/auth';
 import type { FirestoreUser } from '../types/firestore';
 import type { UserRole } from '@rentify/shared-types';
+import { agentProfileFields, stripUndefined } from '../utils/firestoreHelpers';
 
 const router = Router();
 
@@ -22,30 +23,30 @@ router.post('/profile', authenticate, async (req: AuthenticatedRequest, res: Res
     const userRole: UserRole = role === 'agent' ? 'agent' : 'user';
     const ref = db().collection('users').doc(uid);
     const existing = await ref.get();
-    const timestamp = now();
 
-    const profile: FirestoreUser = {
+    if (!existing.exists && !avatar) {
+      res.status(400).json({ error: 'Profile photo is required' });
+      return;
+    }
+
+    const timestamp = now();
+    const existingData = existing.exists ? (existing.data() as FirestoreUser) : null;
+
+    const profile = stripUndefined({
       name: name || email?.split('@')[0] || 'User',
       email: (email || req.auth!.email || '').toLowerCase(),
-      phone,
-      role: existing.exists ? (existing.data() as FirestoreUser).role : userRole,
+      ...(phone !== undefined && phone !== '' ? { phone } : {}),
+      role: existingData?.role ?? userRole,
       avatar,
       isSuspended: false,
-      agencyName: userRole === 'agent' ? agencyName : undefined,
-      licenseNumber: userRole === 'agent' ? licenseNumber : undefined,
-      bio: userRole === 'agent' ? bio : undefined,
-      rating: existing.exists ? (existing.data() as FirestoreUser).rating : 0,
-      isVerified: existing.exists ? (existing.data() as FirestoreUser).isVerified : false,
-      createdAt: existing.exists ? (existing.data() as FirestoreUser).createdAt : timestamp,
+      rating: existingData?.rating ?? 0,
+      isVerified: existingData?.isVerified ?? false,
+      createdAt: existingData?.createdAt ?? timestamp,
       updatedAt: timestamp,
-    };
-
-    if (!existing.exists && userRole === 'agent') {
-      profile.role = 'agent';
-      profile.agencyName = agencyName;
-      profile.licenseNumber = licenseNumber;
-      profile.bio = bio;
-    }
+      ...(userRole === 'agent'
+        ? agentProfileFields({ agencyName, licenseNumber, bio })
+        : {}),
+    }) as FirestoreUser;
 
     await ref.set(profile, { merge: true });
     await getAuth().setCustomUserClaims(uid, { role: profile.role });
@@ -95,7 +96,7 @@ router.patch('/me', authenticate, async (req: AuthenticatedRequest, res: Respons
       if (req.body[key] !== undefined) updates[key] = req.body[key];
     }
 
-    await ref.update(updates);
+    await ref.update(stripUndefined(updates));
     const updated = await ref.get();
     res.json({ user: toPublicUser(uid, updated.data() as FirestoreUser) });
   } catch (err) {

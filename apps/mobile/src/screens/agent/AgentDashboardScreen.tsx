@@ -69,7 +69,7 @@ export function AgentDashboardScreen({ navigation }: Props) {
                 {item.title}
               </Text>
               <Text style={styles.listingMeta}>
-                ${item.price.toLocaleString()}/mo · {item.location.city}
+                ${item.price.toLocaleString()}/mo · {item.location}
               </Text>
             </View>
             <View

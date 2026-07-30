@@ -14,12 +14,12 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
 import { useListingStore } from '../../store/listingStore';
-import { useAuthStore } from '../../store/authStore';
 import { AMENITIES_OPTIONS, PROPERTY_TYPES } from '../../data/mockData';
 import { colors, spacing, typography, radius } from '../../theme';
 import type { AgentStackParamList } from '../../navigation/types';
 import type { Listing, PropertyType } from '@rentify/shared-types';
 import { uploadImage } from '../../services/upload';
+import type { ListingInput } from '../../store/listingStore';
 
 type Props = NativeStackScreenProps<AgentStackParamList, 'AddListing' | 'EditListing'>;
 
@@ -30,14 +30,12 @@ export function ListingFormScreen({ route, navigation }: Props) {
     listingId ? s.listings.find((l) => l.id === listingId) : undefined
   );
   const { addListing, updateListing } = useListingStore();
-  const user = useAuthStore((s) => s.user);
 
   const [step, setStep] = useState(0);
   const [title, setTitle] = useState(existing?.title || '');
   const [description, setDescription] = useState(existing?.description || '');
   const [price, setPrice] = useState(existing?.price?.toString() || '');
-  const [address, setAddress] = useState(existing?.location.address || '');
-  const [city, setCity] = useState(existing?.location.city || '');
+  const [location, setLocation] = useState(existing?.location || '');
   const [propertyType, setPropertyType] = useState<PropertyType>(
     existing?.propertyType || 'apartment'
   );
@@ -77,12 +75,30 @@ export function ListingFormScreen({ route, navigation }: Props) {
     );
   };
 
-  const handleSubmit = () => {
-    const data: Partial<Listing> = {
-      title,
-      description,
+  const validateLocation = () => {
+    if (!location.trim()) {
+      Alert.alert('Location required', 'Please enter the property location.');
+      return false;
+    }
+    return true;
+  };
+
+  const handleNext = () => {
+    if (step === 0 && !validateLocation()) return;
+    setStep(step + 1);
+  };
+
+  const handleSubmit = async () => {
+    if (!validateLocation()) {
+      setStep(0);
+      return;
+    }
+
+    const data: ListingInput = {
+      title: title.trim(),
+      description: description.trim(),
       price: parseInt(price, 10),
-      location: { address, city, lat: 30.27, lng: -97.74 },
+      location: location.trim(),
       propertyType,
       bedrooms: parseInt(bedrooms, 10),
       bathrooms: parseFloat(bathrooms),
@@ -93,31 +109,22 @@ export function ListingFormScreen({ route, navigation }: Props) {
         : ['https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=800'],
     };
 
-    if (listingId) {
-      updateListing(listingId, data);
-    } else {
-      addListing({
-        id: `listing-${Date.now()}`,
-        agentId: user!.id,
-        ...data,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        agent: {
-          id: user!.id,
-          name: user!.name,
-          avatar: user!.avatar,
-          rating: user!.rating,
-          agencyName: user!.agencyName,
-        },
-      } as Listing);
-    }
+    try {
+      if (listingId) {
+        await updateListing(listingId, data);
+      } else {
+        await addListing(data);
+      }
 
-    Alert.alert('Success', listingId ? 'Listing updated' : 'Listing created', [
-      { text: 'OK', onPress: () => navigation.goBack() },
-    ]);
+      Alert.alert('Success', listingId ? 'Listing updated' : 'Listing created', [
+        { text: 'OK', onPress: () => navigation.goBack() },
+      ]);
+    } catch (err) {
+      Alert.alert('Error', (err as Error).message);
+    }
   };
 
-  const steps = ['Details', 'Location', 'Features'];
+  const steps = ['Details', 'Features'];
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -144,6 +151,12 @@ export function ListingFormScreen({ route, navigation }: Props) {
             onChangeText={setPrice}
             keyboardType="numeric"
           />
+          <Input
+            label="Location"
+            value={location}
+            onChangeText={setLocation}
+            placeholder="742 Oak Street, Austin"
+          />
           <Text style={styles.label}>Photos</Text>
           <TouchableOpacity style={styles.photoBtn} onPress={pickImages} disabled={uploading}>
             <Text style={styles.photoBtnText}>
@@ -160,9 +173,7 @@ export function ListingFormScreen({ route, navigation }: Props) {
 
       {step === 1 && (
         <>
-          <Text style={styles.stepTitle}>Location</Text>
-          <Input label="Address" value={address} onChangeText={setAddress} />
-          <Input label="City" value={city} onChangeText={setCity} />
+          <Text style={styles.stepTitle}>Features</Text>
           <Text style={styles.label}>Property Type</Text>
           <View style={styles.chipRow}>
             {PROPERTY_TYPES.map(({ label, value }) => (
@@ -177,12 +188,6 @@ export function ListingFormScreen({ route, navigation }: Props) {
               </TouchableOpacity>
             ))}
           </View>
-        </>
-      )}
-
-      {step === 2 && (
-        <>
-          <Text style={styles.stepTitle}>Features</Text>
           <Input label="Bedrooms" value={bedrooms} onChangeText={setBedrooms} keyboardType="numeric" />
           <Input label="Bathrooms" value={bathrooms} onChangeText={setBathrooms} keyboardType="numeric" />
           <Text style={styles.label}>Amenities</Text>
@@ -210,8 +215,8 @@ export function ListingFormScreen({ route, navigation }: Props) {
         {step > 0 && (
           <Button title="Back" variant="outline" onPress={() => setStep(step - 1)} style={styles.navBtn} />
         )}
-        {step < 2 ? (
-          <Button title="Next" onPress={() => setStep(step + 1)} style={styles.navBtn} />
+        {step < 1 ? (
+          <Button title="Next" onPress={handleNext} style={styles.navBtn} />
         ) : (
           <Button title={listingId ? 'Update Listing' : 'Publish Listing'} onPress={handleSubmit} style={styles.navBtn} />
         )}
@@ -226,7 +231,7 @@ const styles = StyleSheet.create({
   steps: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.lg },
   stepDot: { flex: 1, height: 4, borderRadius: 2, backgroundColor: colors.border },
   stepDotActive: { backgroundColor: colors.accent },
-  stepTitle: { ...typography.h2, marginBottom: spacing.lg },
+  stepTitle: { ...typography.h2, marginBottom: spacing.sm },
   label: { fontSize: 14, fontWeight: '600', marginBottom: spacing.sm },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.lg },
   chip: {

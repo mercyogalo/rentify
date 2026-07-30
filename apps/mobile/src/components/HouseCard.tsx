@@ -40,7 +40,7 @@ export function HouseCard({ listing, onPress, isFavorite, onToggleFavorite }: Pr
           {listing.title}
         </Text>
         <Text style={styles.location}>
-          {listing.location.city} · {listing.bedrooms} bed · {listing.bathrooms} bath
+          {listing.location} · {listing.bedrooms} bed · {listing.bathrooms} bath
         </Text>
         {listing.agent && (
           <View style={styles.agentRow}>

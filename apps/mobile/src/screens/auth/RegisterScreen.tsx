@@ -8,6 +8,7 @@ import {
   Platform,
   Alert,
   TouchableOpacity,
+  Image,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Input } from '../../components/Input';
@@ -15,6 +16,7 @@ import { Button } from '../../components/Button';
 import { useAuthStore } from '../../store/authStore';
 import { colors, spacing, typography, radius } from '../../theme';
 import type { AuthStackParamList } from '../../navigation/types';
+import { pickProfileImage } from '../../services/upload';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Register'>;
 
@@ -27,9 +29,23 @@ export function RegisterScreen({ navigation }: Props) {
   const [agencyName, setAgencyName] = useState('');
   const [licenseNumber, setLicenseNumber] = useState('');
   const [bio, setBio] = useState('');
+  const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const { register, isLoading } = useAuthStore();
 
+  const handlePickAvatar = async () => {
+    try {
+      const uri = await pickProfileImage();
+      if (uri) setAvatarUri(uri);
+    } catch (err) {
+      Alert.alert('Photo selection failed', (err as Error).message);
+    }
+  };
+
   const handleRegister = async () => {
+    if (!avatarUri) {
+      Alert.alert('Profile photo required', 'Please add a profile photo to create your account.');
+      return;
+    }
     try {
       await register({
         name,
@@ -37,6 +53,7 @@ export function RegisterScreen({ navigation }: Props) {
         phone,
         password,
         role,
+        avatarFileUri: avatarUri || undefined,
         agencyName: role === 'agent' ? agencyName : undefined,
         licenseNumber: role === 'agent' ? licenseNumber : undefined,
         bio: role === 'agent' ? bio : undefined,
@@ -67,6 +84,14 @@ export function RegisterScreen({ navigation }: Props) {
             </TouchableOpacity>
           ))}
         </View>
+
+        <TouchableOpacity style={styles.avatarPicker} onPress={handlePickAvatar}>
+          {avatarUri ? (
+            <Image source={{ uri: avatarUri }} style={styles.avatarPreview} />
+          ) : (
+            <Text style={styles.avatarText}>Add profile photo *</Text>
+          )}
+        </TouchableOpacity>
 
         <Input label="Full Name" value={name} onChangeText={setName} placeholder="Jane Doe" />
         <Input
@@ -119,6 +144,21 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   scroll: { padding: spacing.lg, paddingBottom: spacing.xl * 2 },
   title: { ...typography.h1, marginBottom: spacing.lg },
+  avatarPicker: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+    marginBottom: spacing.lg,
+    alignSelf: 'center',
+    overflow: 'hidden',
+  },
+  avatarPreview: { width: 96, height: 96, borderRadius: 48 },
+  avatarText: { color: colors.textSecondary, textAlign: 'center', paddingHorizontal: spacing.sm },
   roleRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.lg },
   roleChip: {
     flex: 1,

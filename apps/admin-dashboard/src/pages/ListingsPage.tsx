@@ -16,7 +16,7 @@ export function ListingsPage() {
           <thead>
             <tr>
               <th>Title</th>
-              <th>City</th>
+              <th>Location</th>
               <th>Price</th>
               <th>Agent</th>
               <th>Status</th>
@@ -27,7 +27,7 @@ export function ListingsPage() {
             {listings.map((l) => (
               <tr key={l.id}>
                 <td>{l.title}</td>
-                <td>{l.city}</td>
+                <td>{l.location}</td>
                 <td>${l.price.toLocaleString()}</td>
                 <td>{l.agentName || '—'}</td>
                 <td>

@@ -5,11 +5,17 @@ import { authenticate, AuthenticatedRequest } from '../middleware/auth';
 import { uploadToS3, isS3Configured } from '../services/s3';
 
 const router = Router();
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 },
 });
 
+/**
+ * POST /api/upload
+ * Uploads an image to AWS S3 under listings/{userId}/{uuid}.{ext}
+ * Response: { url: string, key: string }
+ */
 router.post(
   '/',
   authenticate,
@@ -22,18 +28,24 @@ router.post(
       }
 
       if (!isS3Configured()) {
-        res.status(503).json({ error: 'S3 upload is not configured' });
+        res.status(503).json({
+          error:
+            'AWS S3 is not configured. Set AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_BUCKET_NAME, and AWS_REGION in apps/api/.env',
+        });
         return;
       }
 
-      const ext = req.file.originalname.split('.').pop() || 'jpg';
+      const ext = req.file.originalname.split('.').pop()?.toLowerCase() || 'jpg';
       const key = `listings/${req.auth!.userId}/${uuidv4()}.${ext}`;
-      const url = await uploadToS3(key, req.file.buffer, req.file.mimetype);
+      const contentType = req.file.mimetype || 'image/jpeg';
+
+      const url = await uploadToS3(key, req.file.buffer, contentType);
 
       res.json({ url, key });
     } catch (err) {
-      console.error(err);
-      res.status(500).json({ error: 'Upload failed' });
+      console.error('Upload error:', err);
+      const message = err instanceof Error ? err.message : 'Upload failed';
+      res.status(500).json({ error: message });
     }
   }
 );

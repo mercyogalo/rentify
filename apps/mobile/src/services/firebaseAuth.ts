@@ -10,6 +10,7 @@ import {
 import { getFirebaseAuth, isFirebaseConfigured } from './firebase';
 import type { User, RegisterRequest } from '@rentify/shared-types';
 import { apiRequest } from './api';
+import { uploadImage } from './upload';
 
 export async function getIdToken(): Promise<string | null> {
   if (!isFirebaseConfigured) return null;
@@ -36,11 +37,32 @@ export async function fetchProfile(token: string): Promise<User> {
 }
 
 export async function registerWithEmail(data: RegisterRequest): Promise<{ user: User; token: string }> {
+  if (!data.avatarFileUri) {
+    throw new Error('Profile photo is required');
+  }
+
   const auth = getFirebaseAuth();
   const cred = await createUserWithEmailAndPassword(auth, data.email, data.password);
-  const token = await cred.user.getIdToken();
-  const user = await setupProfile(token, data);
-  return { user, token };
+
+  try {
+    const token = await cred.user.getIdToken();
+    const avatarUrl = await uploadImage(
+      data.avatarFileUri,
+      `profile-${Date.now()}.jpg`,
+      token
+    );
+
+    const { avatarFileUri, ...profileData } = data;
+    const user = await setupProfile(token, { ...profileData, avatar: avatarUrl });
+    return { user, token };
+  } catch (err) {
+    try {
+      await cred.user.delete();
+    } catch {
+      // ignore cleanup errors
+    }
+    throw err;
+  }
 }
 
 export async function loginWithEmail(email: string, password: string): Promise<{ user: User; token: string }> {

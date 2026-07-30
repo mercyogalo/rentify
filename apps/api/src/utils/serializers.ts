@@ -30,6 +30,14 @@ export function toPublicUser(id: string, data: FirestoreUser): User {
   };
 }
 
+export function normalizeLocation(
+  location: FirestoreListing['location'] | { address?: string; city?: string }
+): string {
+  if (typeof location === 'string') return location;
+  const parts = [location.address, location.city].filter(Boolean);
+  return parts.join(', ');
+}
+
 export function serializeListing(
   id: string,
   data: FirestoreListing,
@@ -42,7 +50,7 @@ export function serializeListing(
     description: data.description,
     images: data.images,
     price: data.price,
-    location: data.location,
+    location: normalizeLocation(data.location as FirestoreListing['location'] | { address?: string; city?: string }),
     propertyType: data.propertyType,
     bedrooms: data.bedrooms,
     bathrooms: data.bathrooms,

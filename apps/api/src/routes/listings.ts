@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import { db, getUserById, getUsersByIds, now } from '../services/firestore';
-import { serializeListing } from '../utils/serializers';
+import { serializeListing, normalizeLocation } from '../utils/serializers';
 import { authenticate, requireRole, AuthenticatedRequest } from '../middleware/auth';
 import type { ListingFilters } from '@rentify/shared-types';
 import type { FirestoreListing } from '../types/firestore';
@@ -28,7 +28,7 @@ router.get('/', async (req, res) => {
     }
     if (filters.city) {
       const city = filters.city.toLowerCase();
-      listings = listings.filter((l) => l.location.city.toLowerCase().includes(city));
+      listings = listings.filter((l) => normalizeLocation(l.location).toLowerCase().includes(city));
     }
     if (filters.minPrice) listings = listings.filter((l) => l.price >= Number(filters.minPrice));
     if (filters.maxPrice) listings = listings.filter((l) => l.price <= Number(filters.maxPrice));
@@ -40,8 +40,7 @@ router.get('/', async (req, res) => {
         (l) =>
           l.title.toLowerCase().includes(q) ||
           l.description.toLowerCase().includes(q) ||
-          l.location.city.toLowerCase().includes(q) ||
-          l.location.address.toLowerCase().includes(q)
+          normalizeLocation(l.location).toLowerCase().includes(q)
       );
     }
 
@@ -117,11 +116,27 @@ router.get('/:id', async (req, res) => {
 
 router.post('/', authenticate, requireRole('agent'), async (req: AuthenticatedRequest, res: Response) => {
   try {
+    const { title, description, images, price, location, propertyType, bedrooms, bathrooms, amenities, status } =
+      req.body;
+
+    if (typeof location !== 'string' || !location.trim()) {
+      res.status(400).json({ error: 'Location is required' });
+      return;
+    }
+
     const timestamp = now();
     const data: FirestoreListing = {
-      ...req.body,
+      title,
+      description,
+      images: images || [],
+      price,
+      location: location.trim(),
+      propertyType,
+      bedrooms,
+      bathrooms,
+      amenities: amenities || [],
       agentId: req.auth!.userId,
-      status: req.body.status || 'available',
+      status: status || 'available',
       createdAt: timestamp,
       updatedAt: timestamp,
     };
@@ -146,7 +161,26 @@ router.patch('/:id', authenticate, requireRole('agent', 'admin'), async (req: Au
       res.status(403).json({ error: 'Forbidden' });
       return;
     }
-    await ref.update({ ...req.body, updatedAt: now() });
+    const updates: Record<string, unknown> = { updatedAt: now() };
+    const allowed = [
+      'title',
+      'description',
+      'images',
+      'price',
+      'location',
+      'propertyType',
+      'bedrooms',
+      'bathrooms',
+      'amenities',
+      'status',
+    ];
+    for (const key of allowed) {
+      if (req.body[key] !== undefined) updates[key] = req.body[key];
+    }
+    if (typeof updates.location === 'string') {
+      updates.location = updates.location.trim();
+    }
+    await ref.update(updates);
     const updated = await ref.get();
     res.json({ listing: await listingWithAgent(updated.id, updated.data() as FirestoreListing) });
   } catch (err) {

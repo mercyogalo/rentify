@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import { db, getUserById } from '../services/firestore';
-import { toPublicUser } from '../utils/serializers';
+import { toPublicUser, normalizeLocation } from '../utils/serializers';
 import { authenticate, requireRole, AuthenticatedRequest } from '../middleware/auth';
 import type { AdminStats, ListingStatus } from '@rentify/shared-types';
 import type { FirestoreListing, FirestoreUser } from '../types/firestore';
@@ -32,7 +32,7 @@ router.get('/stats', async (_req, res: Response) => {
 
     for (const l of listings) {
       listingsByStatus[l.status]++;
-      cityMap.set(l.location.city, (cityMap.get(l.location.city) || 0) + 1);
+      cityMap.set(normalizeLocation(l.location), (cityMap.get(normalizeLocation(l.location)) || 0) + 1);
       typeMap.set(l.propertyType, (typeMap.get(l.propertyType) || 0) + 1);
       agentMap.set(l.agentId, (agentMap.get(l.agentId) || 0) + 1);
     }
@@ -156,7 +156,7 @@ router.get('/listings', async (req, res: Response) => {
     if (search) {
       const q = String(search).toLowerCase();
       listings = listings.filter(
-        (l) => l.title.toLowerCase().includes(q) || l.location.city.toLowerCase().includes(q)
+        (l) => l.title.toLowerCase().includes(q) || normalizeLocation(l.location).toLowerCase().includes(q)
       );
     }
     const results = await Promise.all(
@@ -167,7 +167,7 @@ router.get('/listings', async (req, res: Response) => {
           title: l.title,
           price: l.price,
           status: l.status,
-          city: l.location.city,
+          location: normalizeLocation(l.location),
           agentName: agent?.name,
           createdAt: l.createdAt.toDate().toISOString(),
         };

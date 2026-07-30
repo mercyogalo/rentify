@@ -53,7 +53,7 @@ export function ManageListingsScreen({ navigation }: Props) {
               <Text style={styles.price}>${item.price.toLocaleString()}</Text>
             </View>
             <Text style={styles.meta}>
-              {item.location.city} · {item.status}
+              {item.location} · {item.status}
             </Text>
             <View style={styles.actions}>
               {item.status !== 'available' && (

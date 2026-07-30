@@ -18,10 +18,11 @@ import * as Google from 'expo-auth-session/providers/google';
 import { Input } from '../../components/Input';
 import { useAuthStore } from '../../store/authStore';
 import { spacing, radius } from '../../theme';
+import { pickProfileImage } from '../../services/upload';
 
 WebBrowser.maybeCompleteAuthSession();
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const LOGO_URI =
   'https://s3.amazonaws.com/shecodesio-production/uploads/files/000/181/063/original/ChatGPT_Image_Jul_30__2026__10_41_46_AM.png?1785397549';
@@ -52,6 +53,7 @@ export function OnboardingScreen({ onComplete }: Props) {
   const [phone, setPhone] = useState('');
   const [role, setRole] = useState<'user' | 'agent'>('user');
   const [agencyName, setAgencyName] = useState('');
+  const [avatarUri, setAvatarUri] = useState<string | null>(null);
 
   const [request, , promptAsync] = Google.useIdTokenAuthRequest({
     clientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
@@ -71,7 +73,20 @@ export function OnboardingScreen({ onComplete }: Props) {
     }
   };
 
+  const handlePickAvatar = async () => {
+    try {
+      const uri = await pickProfileImage();
+      if (uri) setAvatarUri(uri);
+    } catch (err) {
+      Alert.alert('Photo selection failed', (err as Error).message);
+    }
+  };
+
   const handleRegister = async () => {
+    if (!avatarUri) {
+      Alert.alert('Profile photo required', 'Please add a profile photo to create your account.');
+      return;
+    }
     try {
       await register({
         name,
@@ -79,6 +94,7 @@ export function OnboardingScreen({ onComplete }: Props) {
         phone,
         password,
         role,
+        avatarFileUri: avatarUri || undefined,
         agencyName: role === 'agent' ? agencyName : undefined,
       });
     } catch (err) {
@@ -101,7 +117,13 @@ export function OnboardingScreen({ onComplete }: Props) {
     return (
       <SafeAreaView style={styles.logoScreen}>
         <View style={styles.logoCenter}>
-          <Image source={{ uri: LOGO_URI }} style={styles.logo} resizeMode="contain" />
+          <View style={styles.logoPlate}>
+            <Image
+              source={{ uri: LOGO_URI }}
+              style={[styles.logo, styles.logoOnDark]}
+              resizeMode="contain"
+            />
+          </View>
         </View>
         <View style={styles.logoFooter}>
           <TouchableOpacity style={styles.whiteButton} onPress={() => setStep(1)} activeOpacity={0.85}>
@@ -169,7 +191,9 @@ export function OnboardingScreen({ onComplete }: Props) {
             <Text style={styles.backText}>← Back</Text>
           </TouchableOpacity>
 
-          <Image source={{ uri: LOGO_URI }} style={styles.authLogo} resizeMode="contain" />
+          <View style={styles.authLogoPlate}>
+            <Image source={{ uri: LOGO_URI }} style={styles.authLogo} resizeMode="contain" />
+          </View>
 
           <View style={styles.tabRow}>
             <TouchableOpacity
@@ -228,6 +252,13 @@ export function OnboardingScreen({ onComplete }: Props) {
                   </TouchableOpacity>
                 ))}
               </View>
+              <TouchableOpacity style={styles.avatarPicker} onPress={handlePickAvatar}>
+                {avatarUri ? (
+                  <Image source={{ uri: avatarUri }} style={styles.avatarPreview} />
+                ) : (
+                  <Text style={styles.avatarText}>Add profile photo *</Text>
+                )}
+              </TouchableOpacity>
               <Input dark label="Full Name" value={name} onChangeText={setName} placeholder="Jane Doe" />
               <Input
                 dark
@@ -290,9 +321,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: spacing.xl,
   },
+  logoPlate: {
+    backgroundColor: mono.black,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.xl,
+    borderRadius: radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   logo: {
-    width: 260,
-    height: 120,
+    width: Math.min(SCREEN_WIDTH * 0.88, 380),
+    height: Math.min(SCREEN_WIDTH * 0.42, 180),
+  },
+  logoOnDark: {
+    tintColor: mono.white,
   },
   logoFooter: {
     padding: spacing.lg,
@@ -384,11 +426,17 @@ const styles = StyleSheet.create({
     color: mono.gray,
     fontSize: 15,
   },
+  authLogoPlate: {
+    backgroundColor: mono.white,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: radius.lg,
+    alignSelf: 'center',
+    marginBottom: spacing.lg,
+  },
   authLogo: {
     width: 180,
     height: 72,
-    alignSelf: 'center',
-    marginBottom: spacing.lg,
   },
   tabRow: {
     flexDirection: 'row',
@@ -413,6 +461,21 @@ const styles = StyleSheet.create({
   tabTextActive: {
     color: mono.white,
   },
+  avatarPicker: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    borderWidth: 1,
+    borderColor: mono.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#111111',
+    marginBottom: spacing.lg,
+    alignSelf: 'center',
+    overflow: 'hidden',
+  },
+  avatarPreview: { width: 96, height: 96, borderRadius: 48 },
+  avatarText: { color: mono.gray, textAlign: 'center', paddingHorizontal: spacing.sm },
   roleRow: {
     flexDirection: 'row',
     gap: spacing.sm,
